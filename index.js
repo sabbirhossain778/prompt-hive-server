@@ -34,10 +34,31 @@ async function run() {
     const database = client.db('promt-hive-db');
     const promptCollection = database.collection('prompts');
 
+
+    app.get('/api/prompts', async (req, res) => {
+      
+      const query = {};
+      if (req.query.creatorId) {
+        query.creatorId = req.query.creatorId;
+      }
+
+      if (req.query.status && req.query.status !== 'all') {
+        query.status = req.query.status;
+      }
+
+      const cursor = promptCollection.find(query);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
     app.post('/api/prompts', async (req, res) => {
-        const prompt = req.body;
-        const result = await promptCollection.insertOne(prompt);
-        res.send(result);
+      const prompt = req.body;
+      const newPrompt = {
+        ...prompt,
+        createdAt: new Date()
+      }
+      const result = await promptCollection.insertOne(newPrompt);
+      res.send(result);
     })
 
 
