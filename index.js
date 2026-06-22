@@ -33,6 +33,8 @@ async function run() {
 
     const database = client.db('promt-hive-db');
     const promptCollection = database.collection('prompts');
+    const bookmarkCollection = database.collection('bookmarks');
+    const reportCollection = database.collection('reports');
 
 
     app.get('/api/prompts', async (req, res) => {
@@ -78,6 +80,56 @@ async function run() {
       const result = await promptCollection.insertOne(newPrompt);
       res.send(result);
     })
+
+
+    // Bookmark APIs
+   app.get('/api/bookmarks/check/:promptId', async (req, res) => {
+      const promptId = req.params.promptId;
+      const userId = req.query.userId; 
+
+      const query = { promptId, userId };
+      const existingBookmark = await bookmarkCollection.findOne(query);
+
+      if (existingBookmark) {
+        res.send({ isBookmarked: true });
+      } else {
+        res.send({ isBookmarked: false });
+      }
+    });
+
+    // Toggle Bookmark
+    app.post('/api/bookmarks/toggle', async (req, res) => {
+      const { promptId, userId } = req.body;
+      const query = { promptId, userId };
+      
+      const existingBookmark = await bookmarkCollection.findOne(query);
+
+      if (existingBookmark) {
+        await bookmarkCollection.deleteOne(query);
+        res.send({ isBookmarked: false, message: "Bookmark removed" });
+      } else {
+        const newBookmark = { promptId, userId, createdAt: new Date() };
+        await bookmarkCollection.insertOne(newBookmark);
+        res.send({ isBookmarked: true, message: "Bookmark added" });
+      }
+    });
+
+
+    // API: Submit a report
+    app.post('/api/reports', async (req, res) => {
+      const { promptId, reporterId, reason, description } = req.body;
+      const newReport = {
+        promptId,
+        reporterId,
+        reason,
+        description,
+        status: 'pending',
+        createdAt: new Date()
+      };
+      
+      const result = await reportCollection.insertOne(newReport);
+      res.send(result);
+    });
 
 
     // Send a ping to confirm a successful connection
