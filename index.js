@@ -7,7 +7,7 @@ require('dotenv').config();
 app.use(cors());
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 app.get('/', (req, res) => {
   res.send('Hello World!')
@@ -36,20 +36,38 @@ async function run() {
 
 
     app.get('/api/prompts', async (req, res) => {
-      
-      const query = {};
-      if (req.query.creatorId) {
-        query.creatorId = req.query.creatorId;
-      }
+      const { creatorId, status, search, aiEngine, category, difficulty, sort } = req.query;
+      const query = { status: 'approved' };
 
-      if (req.query.status && req.query.status !== 'all') {
-        query.status = req.query.status;
-      }
+      if (aiEngine && aiEngine !== 'All') query.aiTool = aiEngine;
+      if (category && category !== 'All') query.category = category;
+      if (difficulty && difficulty !== 'All') query.difficulty = difficulty;
+      if (search) query.promptTitle = { $regex: search, $options: 'i' };
 
-      const cursor = promptCollection.find(query);
+      let cursor = promptCollection.find(query);
+
+      // sort logic
+      if (sort === 'Most Popular') cursor = cursor.sort({ rating: -1 });
+      else if (sort === 'Most Copied') cursor = cursor.sort({ copies: -1 });
+      else cursor = cursor.sort({ createdAt: -1 });
+
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    app.get('/api/prompts/trending', async (req, res) => {
+        const trendingPrompts = await promptCollection.find({ visibility: "Public" }).sort({ copyCount: -1 }).limit(6).toArray();
+        res.json(trendingPrompts);
+    });
+
+    app.get('/api/prompts/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = {
+        _id: new ObjectId(id)
+      }
+      const result = await promptCollection.findOne(query);
+      res.send(result)
+    })
 
     app.post('/api/prompts', async (req, res) => {
       const prompt = req.body;
@@ -71,8 +89,6 @@ async function run() {
   }
 }
 run().catch(console.dir);
-
-
 
 
 app.listen(port, () => {
