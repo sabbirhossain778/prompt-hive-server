@@ -35,6 +35,7 @@ async function run() {
     const promptCollection = database.collection('prompts');
     const bookmarkCollection = database.collection('bookmarks');
     const reportCollection = database.collection('reports');
+    const reviewCollection = database.collection('reviews');
 
 
     app.get('/api/prompts', async (req, res) => {
@@ -58,8 +59,8 @@ async function run() {
     });
 
     app.get('/api/prompts/trending', async (req, res) => {
-        const trendingPrompts = await promptCollection.find({ visibility: "Public" }).sort({ copyCount: -1 }).limit(6).toArray();
-        res.json(trendingPrompts);
+      const trendingPrompts = await promptCollection.find({ visibility: "Public" }).sort({ copyCount: -1 }).limit(6).toArray();
+      res.json(trendingPrompts);
     });
 
     app.get('/api/prompts/:id', async (req, res) => {
@@ -83,9 +84,9 @@ async function run() {
 
 
     // Bookmark APIs
-   app.get('/api/bookmarks/check/:promptId', async (req, res) => {
+    app.get('/api/bookmarks/check/:promptId', async (req, res) => {
       const promptId = req.params.promptId;
-      const userId = req.query.userId; 
+      const userId = req.query.userId;
 
       const query = { promptId, userId };
       const existingBookmark = await bookmarkCollection.findOne(query);
@@ -101,7 +102,7 @@ async function run() {
     app.post('/api/bookmarks/toggle', async (req, res) => {
       const { promptId, userId } = req.body;
       const query = { promptId, userId };
-      
+
       const existingBookmark = await bookmarkCollection.findOne(query);
 
       if (existingBookmark) {
@@ -126,9 +127,41 @@ async function run() {
         status: 'pending',
         createdAt: new Date()
       };
-      
+
       const result = await reportCollection.insertOne(newReport);
       res.send(result);
+    });
+
+    // Copy account
+    app.patch('/api/prompts/:id/copy', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const update = { $inc: { copies: 1 } };
+
+      const result = await promptCollection.updateOne(query, update);
+      res.send(result);
+    });
+
+    // Review API
+    app.post('/api/reviews', async (req, res) => {
+      const { promptId, userId, rating, reviewText, userName, userImage } = req.body;
+      const newReview = {
+        promptId,
+        userId,
+        rating,
+        reviewText,
+        userName,
+        userImage,
+        createdAt: new Date()
+      };
+      const result = await reviewCollection.insertOne(newReview);
+      res.send(result);
+    });
+
+    app.get('/api/reviews/:promptId', async (req, res) => {
+      const { promptId } = req.params;
+      const reviews = await reviewCollection.find({ promptId }).sort({ createdAt: -1 }).toArray();
+      res.send(reviews);
     });
 
 
