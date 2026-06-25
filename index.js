@@ -106,7 +106,44 @@ async function run() {
       res.send(result)
     })
 
-    // Get total prompt count by creatorId
+    // Edit prompt
+    app.patch('/api/prompts/:id', async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      const filter = { _id: new ObjectId(id) };
+
+      const updateDoc = {
+        $set: updatedData,
+      };
+
+      const result = await promptCollection.updateOne(filter, updateDoc);
+
+      if (result.matchedCount === 0) {
+        res.status(404).send({ message: "Prompt not found!" });
+      } else {
+        res.send({ message: "Prompt updated successfully", result });
+      }
+    });
+
+    // Delete a prompt by ID
+    app.delete('/api/prompts/:id', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await promptCollection.deleteOne(query);
+
+        if (result.deletedCount === 1) {
+          res.status(200).send({ message: "Prompt deleted successfully" });
+        } else {
+          res.status(404).send({ message: "Prompt not found" });
+        }
+      } catch (error) {
+        console.error("Error deleting prompt:", error);
+        res.status(500).send({ message: "Failed to delete prompt" });
+      }
+    });
+
+    // Get total prompt count by creatorId ===========
     app.get('/api/prompts/count/:creatorId', async (req, res) => {
       try {
         const creatorId = req.params.creatorId;
@@ -143,6 +180,13 @@ async function run() {
       }
     });
 
+    // bookmarks count ===============
+    app.get('/api/bookmarks/count/:userId', async (req, res) => {
+      const userId = req.params.userId;
+      const count = await bookmarkCollection.countDocuments({ userId: userId });
+      res.send({ count });
+    });
+
     // Toggle Bookmark
     app.post('/api/bookmarks/toggle', async (req, res) => {
       const { promptId, userId } = req.body;
@@ -177,7 +221,7 @@ async function run() {
       res.send(result);
     });
 
-    // Copy account
+    // Copy account =====================
     app.patch('/api/prompts/:id/copy', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -185,6 +229,14 @@ async function run() {
 
       const result = await promptCollection.updateOne(query, update);
       res.send(result);
+    });
+
+    // Count user prompt copies =================
+    app.get('/api/prompts/copies/:creatorId', async (req, res) => {
+      const creatorId = req.params.creatorId;
+      const prompts = await promptCollection.find({ creatorId: creatorId }).toArray();
+      const total = prompts.reduce((sum, item) => sum + (item.copies || 0), 0);
+      res.send({ total });
     });
 
     // Review API
@@ -241,6 +293,17 @@ async function run() {
       };
       const result = await reviewCollection.insertOne(newReview);
       res.send(result);
+    });
+
+    // prompt stats
+    app.get('/api/prompts/stats/:creatorId', async (req, res) => {
+      const prompts = await promptCollection.find({ creatorId: req.params.creatorId }).toArray();
+      const stats = prompts.map(p => ({
+        name: p.promptTitle.slice(0, 10),
+        copies: p.copies || 0,
+        bookmarks: p.bookmarksCount || 0
+      }));
+      res.json(stats);
     });
 
 
