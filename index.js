@@ -40,7 +40,16 @@ async function run() {
 
     app.get('/api/prompts', async (req, res) => {
       const { creatorId, status, search, aiEngine, category, difficulty, sort } = req.query;
-      const query = { status: 'approved' };
+
+      const query = {
+        status: 'approved',
+        visibility: { $regex: /^public$/i }
+      };
+
+      if (creatorId) {
+        query.creatorId = creatorId;
+        delete query.visibility;
+      }
 
       if (aiEngine && aiEngine !== 'All') query.aiTool = aiEngine;
       if (category && category !== 'All') query.category = category;
@@ -58,6 +67,31 @@ async function run() {
       res.send(result);
     });
 
+    // logger saved prompts
+    app.get('/api/saved-prompts', async (req, res) => {
+      try {
+        if (req.query.savedBy) {
+          const userId = req.query.savedBy;
+          console.log('userId', userId);
+
+          const bookmarks = await bookmarkCollection.find({ userId: userId }).toArray();
+
+          if (bookmarks.length === 0) return res.send([]);
+
+          const promptIds = bookmarks.map(b => new ObjectId(b.promptId));
+
+          const result = await promptCollection.find({ _id: { $in: promptIds } }).toArray();
+          return res.send(result);
+        }
+
+        const result = await promptCollection.find().toArray();
+        res.send(result);
+
+      } catch (error) {
+        res.status(500).send({ message: "Error fetching prompts" });
+      }
+    });
+
     app.get('/api/prompts/trending', async (req, res) => {
       const trendingPrompts = await promptCollection.find({ visibility: "Public" }).sort({ copyCount: -1 }).limit(6).toArray();
       res.json(trendingPrompts);
@@ -71,6 +105,17 @@ async function run() {
       const result = await promptCollection.findOne(query);
       res.send(result)
     })
+
+    // Get total prompt count by creatorId
+    app.get('/api/prompts/count/:creatorId', async (req, res) => {
+      try {
+        const creatorId = req.params.creatorId;
+        const count = await promptCollection.countDocuments({ creatorId: creatorId });
+        res.send({ count });
+      } catch (error) {
+        res.status(500).send({ message: "Error fetching prompt count" });
+      }
+    });
 
     app.post('/api/prompts', async (req, res) => {
       const prompt = req.body;
@@ -143,8 +188,47 @@ async function run() {
     });
 
     // Review API
+    app.get('/api/reviews/:promptId', async (req, res) => {
+      const { promptId } = req.params;
+      const reviews = await reviewCollection.find({ promptId }).sort({ createdAt: -1 }).toArray();
+      res.send(reviews);
+    });
+
+    // Get all reviews posted by a specific user
+    app.get('/api/reviews/user/:userId', async (req, res) => {
+      try {
+        const userId = req.params.userId;
+
+        const userReviews = await reviewCollection.find({ userId: userId }).sort({ createdAt: -1 }).toArray();
+
+        if (userReviews.length === 0) {
+          return res.send([]);
+        }
+
+        const promptIds = userReviews.map(review => new ObjectId(review.promptId));
+
+        const prompts = await promptCollection.find({ _id: { $in: promptIds } }).toArray();
+
+        const mergedReviews = userReviews.map(review => {
+          const matchedPrompt = prompts.find(p => p._id.toString() === review.promptId.toString());
+
+          return {
+            ...review,
+            promptTitle: matchedPrompt?.promptTitle || "Deleted Prompt",
+            aiTool: matchedPrompt?.aiTool || "UNKNOWN"
+          };
+        });
+
+        res.send(mergedReviews);
+      } catch (error) {
+        console.error("Error fetching user reviews:", error);
+        res.status(500).send({ message: "Error fetching user reviews" });
+      }
+    });
+
     app.post('/api/reviews', async (req, res) => {
-      const { promptId, userId, rating, reviewText, userName, userImage } = req.body;
+      console.log("Received Data:", req.body);
+      const { promptId, userId, rating, reviewText, userName, userImage, role } = req.body;
       const newReview = {
         promptId,
         userId,
@@ -152,17 +236,13 @@ async function run() {
         reviewText,
         userName,
         userImage,
+        role,
         createdAt: new Date()
       };
       const result = await reviewCollection.insertOne(newReview);
       res.send(result);
     });
 
-    app.get('/api/reviews/:promptId', async (req, res) => {
-      const { promptId } = req.params;
-      const reviews = await reviewCollection.find({ promptId }).sort({ createdAt: -1 }).toArray();
-      res.send(reviews);
-    });
 
 
     // Send a ping to confirm a successful connection
