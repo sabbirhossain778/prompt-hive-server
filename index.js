@@ -36,6 +36,52 @@ async function run() {
     const bookmarkCollection = database.collection('bookmarks');
     const reportCollection = database.collection('reports');
     const reviewCollection = database.collection('reviews');
+    const planCollection = database.collection('plans');
+    const subscriptionCollection = database.collection('subscriptions');
+    const userCollection = database.collection('user');
+
+
+    // plan
+    app.get('/api/plans', async (req, res) => {
+      const query = {}
+      if (req.query.plan_id) {
+        query.id = req.query.plan_id
+      }
+      const plan = await planCollection.findOne(query);
+      res.send(plan);
+    });
+
+    // subscription
+    app.post('/api/subscriptions', async (req, res) => {
+      try {
+        const { email, userId, planId, amount, currency, transactionId } = req.body;
+
+        // update user plan
+        const updateDoc = {
+          $set: { plan: planId }
+        };
+        await userCollection.updateOne({ email: email }, updateDoc);
+
+        // subscriptions data add
+        const subscriptionData = {
+          userId: userId,
+          email: email,
+          amount: amount,
+          currency: currency,
+          transactionId: transactionId,
+          status: "success",
+          createdAt: new Date()
+        };
+
+        const result = await subscriptionCollection.insertOne(subscriptionData);
+
+        res.send({ success: true, result });
+
+      } catch (error) {
+        console.error("Subscription Error:", error);
+        res.status(500).send({ error: "Failed to process subscription" });
+      }
+    });
 
 
     app.get('/api/prompts', async (req, res) => {
@@ -206,20 +252,20 @@ async function run() {
 
 
     // API: Submit a report
-    app.post('/api/reports', async (req, res) => {
-      const { promptId, reporterId, reason, description } = req.body;
-      const newReport = {
-        promptId,
-        reporterId,
-        reason,
-        description,
-        status: 'pending',
-        createdAt: new Date()
-      };
+    // app.post('/api/reports', async (req, res) => {
+    //   const { promptId, reporterId, reason, description } = req.body;
+    //   const newReport = {
+    //     promptId,
+    //     reporterId,
+    //     reason,
+    //     description,
+    //     status: 'pending',
+    //     createdAt: new Date()
+    //   };
 
-      const result = await reportCollection.insertOne(newReport);
-      res.send(result);
-    });
+    //   const result = await reportCollection.insertOne(newReport);
+    //   res.send(result);
+    // });
 
     // Copy account =====================
     app.patch('/api/prompts/:id/copy', async (req, res) => {
