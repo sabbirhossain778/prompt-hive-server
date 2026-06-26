@@ -210,6 +210,51 @@ async function run() {
       res.send(result);
     })
 
+    // ========================
+    // get all-users
+    app.get('/api/users', async (req, res) => {
+      try {
+        const users = await userCollection.find().toArray();
+        res.send(users);
+      } catch (error) {
+        res.status(500).send({ message: "Error fetching users" });
+      }
+    });
+
+    // Delete User
+    app.delete('/api/users/:id', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await userCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Error deleting user" });
+      }
+    });
+
+    // Update User Role
+    app.patch('/api/users/:id/role', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { role } = req.body;
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = { $set: { role: role } };
+        const result = await userCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Error updating role" });
+      }
+    });
+    //========================
+    
+    // Get all prompts for Admin Moderation
+    app.get('/api/admin/all-prompts', async (req, res) => {
+        const result = await promptCollection.find().sort({ createdAt: -1 }).toArray();
+        res.send(result);
+    });
+
+    // =======================
 
     // Bookmark APIs
     app.get('/api/bookmarks/check/:promptId', async (req, res) => {
@@ -352,7 +397,7 @@ async function run() {
       res.json(stats);
     });
 
-
+// not for client side ,,give me git commit for server side
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
